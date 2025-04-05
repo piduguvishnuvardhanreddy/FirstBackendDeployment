@@ -1,0 +1,7 @@
+Send Request
+POST http://localhost:3000/home/
+Content-Type: application/json
+
+{
+    "name":"Vishnu"
+}
