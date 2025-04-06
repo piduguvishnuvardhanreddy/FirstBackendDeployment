@@ -58,3 +58,36 @@ app.post("/", async (request,response) => {
     const itemId = dbResponse.lastID;
     response.send({id: itemId});
 });
+// API 5 
+app.get('/user/', async (request,response) => {
+    const getUser = `SELECT * FROM user;`;
+    const dbResponse = await db.all(getUser);
+    response.send(dbResponse);
+})
+
+// API RRGISTER 
+app.post("/user/", async (request, response) => {
+    const { username,  password, name } = request.body;
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const selectUserQuery = `SELECT * FROM user WHERE username = '${username}'`;
+    const dbUser = await db.get(selectUserQuery);
+    if (dbUser === undefined) {
+      const createUserQuery = `
+        INSERT INTO 
+          user (username, password, name) 
+        VALUES 
+          (
+            '${username}', 
+            '${hashedPassword}', 
+            '${name}',
+          )`;
+      const dbResponse = await db.run(createUserQuery);
+      const newUserId = dbResponse.lastID;
+      response.send(`Created new user with ${newUserId}`);
+    } else {
+      response.status = 400;
+      response.send("User already exists");
+    }
+  });
+
+
