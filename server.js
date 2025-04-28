@@ -3,6 +3,9 @@ const path = require('path');
 const {open} = require('sqlite');
 const sqlite3 = require('sqlite3');
 const cors = require('cors');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+
 let db;
 const dbPath = path.join(__dirname, "full.db");
 const app = express();
@@ -43,6 +46,7 @@ app.post("/home/", async (request,response) => {
     const bookId = dbResponse.lastID;
     response.send( bookId );
 });
+
 //API3 
 app.get("/", async (request,response) => {
     const getCartQuery = `SELECT * FROM CART;`;
@@ -58,36 +62,110 @@ app.post("/", async (request,response) => {
     const itemId = dbResponse.lastID;
     response.send({id: itemId});
 });
-// API 5 
-app.get('/user/', async (request,response) => {
-    const getUser = `SELECT * FROM user;`;
-    const dbResponse = await db.all(getUser);
-    response.send(dbResponse);
-})
+app.get('/user', async (request,response) => {
+  const userQuery =   `SELECT * FROM user;`;
+  const userDetails = await db.all(userQuery);
+  response.send(userDetails);
+});
 
 // API RRGISTER 
+app.post("/user/register/", async (request, response) => {
+  const { username,  password, name } = request.body;
+  const createUserQuery = `
+      INSERT INTO 
+        user (username, password, name) 
+      VALUES 
+        (
+          '${username}', 
+          '${password}', 
+          '${name}'
+        );`;
+    const dbResponse = await db.run(createUserQuery);
+    const newUserId = dbResponse.lastID;
+    response.send(`Created new user with ${newUserId}`);
+  }
+);
+
+// register 
 app.post("/user/", async (request, response) => {
-    const { username,  password, name } = request.body;
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const selectUserQuery = `SELECT * FROM user WHERE username = '${username}'`;
-    const dbUser = await db.get(selectUserQuery);
-    if (dbUser === undefined) {
-      const createUserQuery = `
-        INSERT INTO 
-          user (username, password, name) 
-        VALUES 
-          (
-            '${username}', 
-            '${hashedPassword}', 
-            '${name}',
-          )`;
-      const dbResponse = await db.run(createUserQuery);
-      const newUserId = dbResponse.lastID;
-      response.send(`Created new user with ${newUserId}`);
+  const { username, name, password} = request.body;
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const selectUserQuery = `SELECT * FROM user WHERE username = '${username}'`;
+  const dbUser = await db.get(selectUserQuery);
+  if (dbUser === undefined) {
+    const createUserQuery = `
+      INSERT INTO 
+        user (username, password, name) 
+      VALUES 
+        (
+          '${username}', 
+          '${hashedPassword}', 
+          '${name}'
+        );`;
+    const dbResponse = await db.run(createUserQuery);
+    const newUserId = dbResponse.lastID;
+    response.send(`Created new user with ${newUserId}`);
+  } else {
+    response.status = 400;
+    response.send("User already exists");
+  }
+});
+
+// user conformation 
+app.get('/already' , async (request,response) => {
+  const { username, password } = request.body;
+  const selectUserQuery = `SELECT * FROM user WHERE username = '${username}'`;
+  const dbUser = await db.get(selectUserQuery);
+  if (dbUser === undefined) {
+    response.status(400);
+    response.send("Invalid User");
+  } else {
+    response.send('alreday User exits'); 
+  }
+})
+
+
+// login 
+app.post("/login", async (request, response) => {
+  const { username, password } = request.body;
+  const selectUserQuery = `SELECT * FROM user WHERE username = '${username}'`;
+  const dbUser = await db.get(selectUserQuery);
+  if (dbUser === undefined) {
+    response.status(400);
+    response.send("Invalid User");
+  } else {
+    const isPasswordMatched = await bcrypt.compare(password, dbUser.password);
+    if (isPasswordMatched === true) {
+      const payload = {
+        username: username,
+      };
+      const jwtToken = jwt.sign(payload, "MY_SECRET_TOKEN");
+      response.send({ jwtToken });
     } else {
-      response.status = 400;
-      response.send("User already exists");
+      response.status(400);
+      response.send("Invalid Password");
     }
-  });
+  }
+});
 
-
+// authenticate token 
+const authenticateToken = (request, response, next) => {
+  let jwtToken;
+  const authHeader = request.headers["authorization"];
+  if (authHeader !== undefined) {
+    jwtToken = authHeader.split(" ")[1];
+  }
+  if (jwtToken === undefined) {
+    response.status(401);
+    response.send("Invalid JWT Token");
+  } else {
+    jwt.verify(jwtToken, "MY_SECRET_TOKEN", async (error, payload) => {
+      if (error) {
+        response.status(401);
+        response.send("Invalid JWT Token");
+      } else {
+        next();
+      }
+    });
+  }
+};
