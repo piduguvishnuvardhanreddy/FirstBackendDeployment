@@ -5,6 +5,7 @@ const sqlite3 = require('sqlite3');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { request } = require('http');
 
 let db;
 const dbPath = path.join(__dirname, "full.db");
@@ -169,3 +170,27 @@ const authenticateToken = (request, response, next) => {
     });
   }
 };
+
+// use 
+app.get('/name', async (request,response) => {
+  const getNames = `SELECT * FROM name ;`;
+  const nameresponse = await db.all(getNames);
+  response.send(nameresponse)
+});
+
+
+app.get('/name/:id', async (request,response) => {
+  const {id} = request.params
+  const getNames = `SELECT * FROM name WHERE id=${id};`;
+  const nameresponse = await db.all(getNames);
+  response.send(nameresponse)
+});
+
+app.post("/name", async (request,response) => {
+  const {boy, girl, id } = request.body;
+  const insertName = `INSERT INTO name (id,boy,girl) VALUES ("${id}","${boy}","${girl}");`;
+  const postresponse = await db.run(insertName);
+  const lastId =  postresponse.lastID;
+  response.send({id : lastId});
+
+});
